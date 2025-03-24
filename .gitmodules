@@ -1,0 +1,3 @@
+[submodule "kuksa-databroker"]
+	path = kuksa-databroker
+	url = https://github.com/eclipse-kuksa/kuksa-databroker.git
