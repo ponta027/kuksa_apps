@@ -19,7 +19,8 @@ jobs:
         submodules: recursive    
     - name: Update submodules
       id: update
-      run: git submodule update --remote --recursive         
+      run: git submodule update --remote --recursive
+      continue-on-error: true
     - name: Prepare
       run: cd kuksa_app
     - name: Build
