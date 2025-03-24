@@ -16,7 +16,8 @@ jobs:
     steps:
     - uses: actions/checkout@v4
       with:
-        submodules: recursive    
+        submodules: recursive  
+      continue-on-error: true        
     - name: Update submodules
       id: update
       run: git submodule update --remote --recursive
