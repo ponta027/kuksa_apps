@@ -24,7 +24,7 @@ jobs:
       continue-on-error: true
     - name: Build
       run: |
-      cd kuksa_app
-      cargo build --verbose
+        cd kuksa_app
+        cargo build --verbose
     - name: Run tests
       run: cargo test --verbose
