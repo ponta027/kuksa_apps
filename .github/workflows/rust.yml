@@ -27,6 +27,6 @@ jobs:
         cd kuksa_app
         cargo build --verbose
     - name: Run test
-        run:|
+      run: |
         cd kuksa_app
         cargo test --verbose
