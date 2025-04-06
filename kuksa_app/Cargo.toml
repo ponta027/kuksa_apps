@@ -3,6 +3,10 @@ name = "kuksa_app"
 version = "0.1.0"
 edition = "2024"
 
+[[bin]]
+name = "sample_provider"
+path = "src/sample_provider.rs"
+
 [workspace.dependencies]
 clap = { version = "4.2", default-features = false }
 databroker-proto = { path = "../kuksa-databroker/databroker-proto" }

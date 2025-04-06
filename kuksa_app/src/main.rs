@@ -1,29 +1,31 @@
-use kuksa::*;
-use prost_types::Timestamp;
-use std::collections::HashMap;
-use std::fmt;
-use std::string::ParseError;
-use std::time::SystemTime;
-
 use ansi_term::Color;
+use kuksa::*;
+use std::fmt;
 use std::{thread, time};
+mod kuksa_util;
 
 struct DisplayDatapoint(proto::v1::Datapoint);
 use databroker_proto::kuksa::val as proto;
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let url: String = "127.0.0.1:55555".to_string();
-    let mut client = KuksaClient::new(kuksa_common::to_uri(url)?);
+    println!("Start");
+    let mut client = KuksaClient::new(kuksa_common::to_uri(String::from("127.0.0.1:55555"))?);
 
-    handle_publish_command("Vehicle.Speed", "200", &mut client).await?;
-    handle_actuate_command(
+    kuksa_util::handle_actuate_command(
         "Vehicle.Cabin.Door.Row1.PassengerSide.IsOpen",
         "true",
         &mut client,
     )
     .await?;
 
-    let mut subscription_nbr = 1;
+    let result =
+        kuksa_util::handle_get_command(vec![String::from("Vehicle.Speed")], &mut client).await?;
+    println!("Get:{}", result);
+    let signals = kuksa_util::get_signals(vec![String::from("Vehicle.Speed")], &mut client).await?;
+    println!("{:?}", signals);
+
+    let subscription_nbr = 1;
     let input: String = "Vehicle.Speed".to_string();
     match client.subscribe(vec![&input]).await {
         Ok(mut subscription) => {
@@ -67,28 +69,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                         }
                                     }
                                 }
-                            //                                write!(iface, "{output}").unwrap();
                             } else {
-                                //                                writeln!(
-                                //                                    iface,
-                                //                                    "{} {}",
-                                //                                    Color::Red.dimmed().paint(&sub_disp),
-                                //                                    Color::White
-                                //                                        .dimmed()
-                                //                                        .paint("Server gone. Subscription stopped"),
-                                //                                )
-                                //                                .unwrap();
                                 break;
                             }
                         }
                         Err(err) => {
-                            //                            write!(
-                            //                                iface,
-                            //                                "{} {}",
-                            //                                &sub_disp_color,
-                            //                                Color::Red.dimmed().paint(format!("Channel error: {err}"))
-                            //                            )
-                            //                            .unwrap();
                             break;
                         }
                     }
@@ -101,148 +86,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             println!("{}", format_args!("Error {msg:?}"))
         }
     }
-    let five_sec = time::Duration::from_secs(30);
-    thread::sleep(five_sec);
-    Ok(())
-}
-async fn handle_actuate_command(
-    path: &str,
-    input: &str,
-    client: &mut KuksaClient,
-) -> Result<(), Box<dyn std::error::Error>> {
-    println!("oath:{}", path);
-    let datapoint_entries = match client.get_metadata(vec![path]).await {
-        Ok(data_entries) => Some(data_entries),
-        _ => {
-            println!("ERROR datapoint_entry");
-            None
-        }
-    };
-    if let Some(entries) = datapoint_entries {
-        println!("datapoint_entry");
-        for entry in entries {
-            println!("entry:{:?}", entry);
-            if let Some(metadata) = entry.metadata {
-                let value = input.parse::<bool>().unwrap();
-                let data_value: Result<kuksa::proto::v1::datapoint::Value, ParseError> =
-                    Ok(proto::v1::datapoint::Value::Bool(value));
-                //                let data_value = try_into_data_value(
-                //                    value,
-                //                    proto::v1::DataType::try_from(metadata.data_type).unwrap(),
-                //                );
-                if data_value.is_err() {
-                    println!(
-                        "Could not parse \"{value}\" as {:?}",
-                        proto::v1::DataType::try_from(metadata.data_type).unwrap()
-                    );
-                    continue;
-                }
-
-                if metadata.entry_type != proto::v1::EntryType::Actuator as i32 {
-                    println!("{}", format!("{} is not an actuator.", path));
-                    //cli::print_error("actuate", format!("{} is not an actuator.", path))?;
-                    continue;
-                }
-
-                let ts = Timestamp::from(SystemTime::now());
-                let datapoints = HashMap::from([(
-                    path.to_string(),
-                    proto::v1::Datapoint {
-                        timestamp: Some(ts),
-                        value: Some(data_value.unwrap()),
-                    },
-                )]);
-
-                println!("datapoints:{:?}", datapoints);
-                match client.set_target_values(datapoints).await {
-                    Ok(_) => println!("OK:actuate"),
-                    Err(ClientError::Status(status)) => println!("ERROR:actuate{:?}", &status),
-                    Err(ClientError::Connection(msg)) => println!("ERROR:actuate{:?}", msg),
-                    Err(ClientError::Function(msg)) => {
-                        println!("actuate{:?}", format_args!("Error {msg:?}"))
-                    } //                    Ok(_) => cli::print_resp_ok("actuate")?,
-                      //                    Err(ClientError::Status(status)) => cli::print_resp_err("actuate", &status)?,
-                      //                    Err(ClientError::Connection(msg)) => cli::print_error("actuate", msg)?,
-                      //                    Err(ClientError::Function(msg)) => {
-                      //                        cli::print_resp_err_fmt("actuate", format_args!("Error {msg:?}"))?
-                      //                    }
-                }
-            }
-        }
+    loop {
+        thread::sleep(time::Duration::from_secs(10));
     }
-
-    println!("Hello, world!");
-    //
-    Ok(())
-}
-
-async fn handle_publish_command(
-    path: &str,
-    input: &str,
-    client: &mut KuksaClient,
-) -> Result<(), Box<dyn std::error::Error>> {
-    let datapoint_entries = match client.get_metadata(vec![path]).await {
-        Ok(data_entries) => Some(data_entries),
-        Err(kuksa_common::ClientError::Status(status)) => {
-            println!("metadata:{:?}", &status);
-            None
-        }
-        Err(kuksa_common::ClientError::Connection(msg)) => {
-            println!("metadata:{:?}", msg);
-            None
-        }
-        Err(kuksa_common::ClientError::Function(msg)) => {
-            println!("publish:{}", format_args!("Error {msg:?}"));
-            None
-        }
-    };
-
-    if let Some(entries) = datapoint_entries {
-        for entry in entries {
-            if let Some(metadata) = entry.metadata {
-                let value = input.parse::<f32>().unwrap();
-                let data_value: Result<kuksa::proto::v1::datapoint::Value, ParseError> =
-                    Ok(proto::v1::datapoint::Value::Float(value));
-
-                //                let data_value = try_into_data_value(
-                //                    value,
-                //                    proto::v1::DataType::try_from(metadata.data_type).unwrap(),
-                //                );
-                if data_value.is_err() {
-                    println!(
-                        "Could not parse \"{}\" as {:?}",
-                        value,
-                        proto::v1::DataType::try_from(metadata.data_type).unwrap()
-                    );
-                    continue;
-                }
-                let ts = Timestamp::from(SystemTime::now());
-                let datapoints = HashMap::from([(
-                    path.to_string().clone(),
-                    proto::v1::Datapoint {
-                        timestamp: Some(ts),
-                        value: Some(data_value.unwrap()),
-                    },
-                )]);
-
-                match client.set_current_values(datapoints).await {
-                    Ok(_) => {
-                        println!("publish");
-                    }
-                    Err(kuksa_common::ClientError::Status(status)) => {
-                        println!("publish:{:?}", &status)
-                    }
-                    Err(kuksa_common::ClientError::Connection(msg)) => {
-                        println!("publish:{:?}", msg)
-                    }
-                    Err(kuksa_common::ClientError::Function(msg)) => {
-                        println!("publish:{}", format_args!("Error {msg:?}"));
-                    }
-                }
-            }
-        }
-    }
-
     Ok(())
 }
 fn display_array<T>(f: &mut fmt::Formatter<'_>, array: &[T]) -> fmt::Result
